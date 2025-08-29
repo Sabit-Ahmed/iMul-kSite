@@ -4,6 +4,7 @@ import fun_biased_libsvm
 from datetime import datetime
 import os
 from pathlib import Path
+from joblib import dump
 
 # -----------------------
 # Paths (cross-platform)
@@ -74,7 +75,7 @@ def get_indices():
 def Optimized():
     no = int(input(
         "0:aaFeature\n1:binaryFeature\n2:ProbabilityFeature\n3:C1SAAP\n4:C2SAAP\n"
-        "5:C3SAAP\n6:C4SAAP\n7:C5SAAP\n8:all\n9:selection\n\nChoose an option: "
+        "5:C3SAAP\n6:C4SAAP\n7:C5SAAP\n8:all\n9:selection\n10:train for deployment\n\nChoose an option: "
     ))
 
     ptm_type = {'Ace': 4154, 'Cro': 208, 'Met': 325, 'Suc': 1253, 'Glut': 236}
@@ -103,7 +104,26 @@ def Optimized():
             feature_name = 'Selection'
             clf_type = "no"
             print("Model with LibSVM")
-
+        elif no == 10:
+            feature_name_list = ['aaFeature', 'ProbabilityFeature', 'binaryFeature', 'C5SAAP']
+            X, y = integrate_select_unmapped_features.OptimizedReadFeatures(absolute_path, key, value, feature_name_list)
+            print(X.shape)
+            K = 100
+            if K >= 3527:
+                X, indices = integrate_select_unmapped_features.int_and_sel('all', X, y)
+            else:
+                X, indices = integrate_select_unmapped_features.int_and_sel(K, X, y)
+            indices_all[key] = pd.DataFrame(indices)
+            feature_name = 'Selection'
+            clf_type = "no"
+            print("Model with LibSVM")
+            clf = fun_biased_libsvm.Train_Full(X, key="Ace", value=4154, clf_type="no")
+            # Save the trained model
+            model_dir = os.path.join(absolute_path, "performance", "models")
+            os.makedirs(model_dir, exist_ok=True)
+            dump(clf, os.path.join(model_dir, f"{key}_full_model.joblib"))
+            print(f"Saved model to {os.path.join(model_dir, f'{key}_full_model.joblib')}")
+            return
         else:
             feature_name = features[no]
             X, y = integrate_select_unmapped_features.OptimizedReadFeatures(absolute_path, key, value, feature_name)

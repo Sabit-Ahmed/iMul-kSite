@@ -268,3 +268,88 @@ def OptimizedPred(y_test, y_pred):
     print("abs-false: " + str(abs_false))
 
     return result
+
+def Train_Full(X, key, value, clf_type):
+    """
+    Train a single SVC on ALL data (no cross-validation) and print training results.
+    Uses same label wiring and C/gamma logic as Optimized_CLF.
+    Returns the fitted classifier.
+    """
+    import math
+    from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+
+    # --- paths/labels mirroring Optimized_CLF ---
+    dataset_index_path = os.path.join(absolute_path, 'Dataset', 'Combined_Preprocessing')
+    pos_ind = pd.read_csv(os.path.join(dataset_index_path, f"{key.lower()}_pos_ind.csv"), header=None)
+    neg_ind = pd.read_csv(os.path.join(dataset_index_path, f"{key.lower()}_neg_ind.csv"), header=None)
+    ptm_dataset = pd.read_csv(os.path.join(dataset_index_path, "S13_PTM_Dataset.csv"), index_col=[0])
+    y_train = np.array(ptm_dataset[key], dtype=np.int64)
+
+    sc = StandardScaler()
+    X = sc.fit_transform(X)
+    pos_ind = np.array(pos_ind, dtype=np.int64)
+    neg_ind = np.array(neg_ind, dtype=np.int64)
+
+    X_train = np.zeros([X.shape[0], X.shape[1]], dtype=np.float64)
+    for c in range(len(X)):
+        if c < value:
+            X_train[pos_ind[c]] = X[c]
+        else:
+            X_train[neg_ind[c - value]] = X[c]
+
+    # class weights
+    wp = X_train.shape[0] / (2 * pos_ind.shape[0])
+    wn = X_train.shape[0] / (2 * neg_ind.shape[0])
+    weight = {0: wn, 1: wp}
+
+    # ---- choose C/gamma exactly like Optimized_CLF ----
+    if clf_type in {"yes", "y"}:
+        if key == "Ace":
+            C = np.array([math.pow(2, 1)] * 5)
+            gamma = np.array([math.pow(2, -8)] * 5)
+        elif key == "Cro":
+            C = np.array([math.pow(2, 9), math.pow(2, 3), math.pow(2, 2), math.pow(2, 5), math.pow(2, 4)])
+            gamma = np.array([math.pow(2, -10)] * 5)
+        elif key == "Met":
+            C = np.array([math.pow(2, 3), math.pow(2, 3), math.pow(2, 1), math.pow(2, 2), math.pow(2, 1)])
+            gamma = np.array([math.pow(2, -8), math.pow(2, -7), math.pow(2, -7), math.pow(2, -8), math.pow(2, -8)])
+        elif key == "Suc":
+            C = np.array([math.pow(2, 3)] * 5)
+            gamma = np.array([math.pow(2, -10)] * 5)
+        elif key == "Glut":
+            C = np.array([math.pow(2, 5), math.pow(2, 3), math.pow(2, 2), math.pow(2, 1), math.pow(2, 1)])
+            gamma = np.array([math.pow(2, -8)] * 5)
+    else:  # "no"/"n"
+        C = np.array([1, 1, 1, 1, 1])
+        g = 1 / X_train.shape[1]
+        gamma = np.array([g] * 5)
+
+    # ensure scalars
+    C = np.asarray(C, dtype=float).ravel()
+    gamma = np.asarray(gamma, dtype=float).ravel()
+    # pick the first set (you can choose another index if you prefer)
+    C_val = C[0].item()
+    gamma_val = gamma[0].item()
+
+    # ---- fit on ALL data ----
+    clf = SVC(C=C_val, kernel='rbf', gamma=gamma_val, class_weight=weight,
+              probability=True, cache_size=500, random_state=0)
+    clf.fit(X_train, y_train)
+
+    # ---- training predictions & report ----
+    y_pred_train = clf.predict(X_train)
+    acc = accuracy_score(y_train, y_pred_train)
+    labels = [0, 1]
+    cm = confusion_matrix(y_train, y_pred_train, labels=labels)
+    report = classification_report(
+        y_train, y_pred_train, labels=labels,
+        target_names=["neg(0)", "pos(1)"], zero_division=0
+    )
+
+    print("\n=== Training results (ALL data) ===")
+    print(f"Key: {key} | clf_type: {clf_type} | C: {C_val} | gamma: {gamma_val}")
+    print(f"Training accuracy: {acc:.4f}")
+    print("Confusion matrix [rows=true, cols=pred]:\n", cm)
+    print("Classification report:\n", report)
+
+    return clf
