@@ -1,4 +1,7 @@
+import joblib
 import pandas as pd
+from sklearn.preprocessing import StandardScaler
+
 import integrate_select_unmapped_features
 import fun_biased_libsvm
 from datetime import datetime
@@ -113,6 +116,14 @@ def Optimized():
                 X, indices = integrate_select_unmapped_features.int_and_sel('all', X, y)
             else:
                 X, indices = integrate_select_unmapped_features.int_and_sel(K, X, y)
+
+            scaler = StandardScaler()
+            scaler.fit(X)  # Fit on training data only
+
+            # Save the scaler
+            scaler_path = os.path.join(absolute_path, "performance", "models", f"scaler_{key}.sav")
+            joblib.dump(scaler, scaler_path)
+            print(f"Saved scaler for {key}")
             indices_all[key] = pd.DataFrame(indices)
             feature_name = 'Selection'
             clf_type = "no"
@@ -123,7 +134,10 @@ def Optimized():
             os.makedirs(model_dir, exist_ok=True)
             dump(clf, os.path.join(model_dir, f"{key}_full_model.joblib"))
             print(f"Saved model to {os.path.join(model_dir, f'{key}_full_model.joblib')}")
-            return
+            save_indices(indices_all, feature_name)
+            if key.lower() == "ace":
+                return
+            continue
         else:
             feature_name = features[no]
             X, y = integrate_select_unmapped_features.OptimizedReadFeatures(absolute_path, key, value, feature_name)

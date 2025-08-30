@@ -1,0 +1,12 @@
+dispatch:
+  # Backend (FastAPI) — all API calls
+  - url: "*/api/*"
+    service: default
+
+  # Backend health check (optional but handy)
+  - url: "*/health"
+    service: default
+
+  # Frontend (React) — everything else
+  - url: "*/*"
+    service: frontend

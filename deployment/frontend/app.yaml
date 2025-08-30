@@ -1,0 +1,6 @@
+service: frontend
+runtime: nodejs20
+entrypoint: npm run serve
+automatic_scaling:
+  min_instances: 0
+  max_instances: 3

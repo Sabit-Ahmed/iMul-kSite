@@ -1,36 +1,42 @@
-// App.js
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import './App.css';
-
-const API_BASE_URL = 'http://localhost:8000';
+// src/App.js
+import React, { useState, useEffect } from "react";
+import "./App.css";
+import api, { API_BASE_URL } from "./api"; // axios instance with baseURL
 
 const PTM_COLORS = {
-    Ace: '#ff6b6b',
-    Cro: '#4ecdc4',
-    Met: '#45b7d1',
-    Suc: '#ffa726',
-    Glut: '#9c27b0'
+    Ace: "#ff6b6b",
+    Cro: "#4ecdc4",
+    Met: "#45b7d1",
+    Suc: "#ffa726",
+    Glut: "#9c27b0",
 };
 
 const PTM_NAMES = {
-    Ace: 'Acetylation',
-    Cro: 'Crotonylation',
-    Met: 'Methylation',
-    Suc: 'Succinylation',
-    Glut: 'Glutarylation'
+    Ace: "Acetylation",
+    Cro: "Crotonylation",
+    Met: "Methylation",
+    Suc: "Succinylation",
+    Glut: "Glutarylation",
 };
 
+// Safe number helpers (no more .toFixed on undefined)
+const num = (v, d = 0) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : d;
+};
+const pct = (v) => `${(num(v) * 100).toFixed(1)}%`;
+const sec = (v) => (Number.isFinite(v) ? v.toFixed(2) : "—");
+
 function App() {
-    const [sequence, setSequence] = useState('');
-    const [sequenceId, setSequenceId] = useState('');
+    const [sequence, setSequence] = useState("");
+    const [sequenceId, setSequenceId] = useState("");
     const [results, setResults] = useState(null);
     const [batchResults, setBatchResults] = useState(null);
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
+    const [error, setError] = useState("");
     const [selectedFile, setSelectedFile] = useState(null);
     const [examples, setExamples] = useState([]);
-    const [activeTab, setActiveTab] = useState('single');
+    const [activeTab, setActiveTab] = useState("single");
 
     useEffect(() => {
         loadExamples();
@@ -38,32 +44,30 @@ function App() {
 
     const loadExamples = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/examples`);
-            setExamples(response.data);
+            const { data } = await api.get("/examples");
+            setExamples(data || []);
         } catch (err) {
-            console.error('Failed to load examples:', err);
+            console.error("Failed to load examples:", err);
         }
     };
 
     const handleSinglePrediction = async () => {
         if (!sequence.trim()) {
-            setError('Please enter a protein sequence');
+            setError("Please enter a protein sequence");
             return;
         }
-
         setLoading(true);
-        setError('');
+        setError("");
         setResults(null);
 
         try {
-            const response = await axios.post(`${API_BASE_URL}/api/predict/single`, {
+            const { data } = await api.post("/predict/single", {
                 sequence: sequence.trim(),
-                sequence_id: sequenceId || undefined
+                sequence_id: sequenceId || undefined,
             });
-
-            setResults(response.data);
+            setResults(data);
         } catch (err) {
-            setError(err.response?.data?.detail || 'Prediction failed');
+            setError(err?.response?.data?.detail || "Prediction failed");
         } finally {
             setLoading(false);
         }
@@ -71,27 +75,23 @@ function App() {
 
     const handleBatchPrediction = async () => {
         if (!selectedFile) {
-            setError('Please select a FASTA file');
+            setError("Please select a FASTA file");
             return;
         }
-
         setLoading(true);
-        setError('');
+        setError("");
         setBatchResults(null);
 
         try {
             const formData = new FormData();
-            formData.append('file', selectedFile);
+            formData.append("file", selectedFile);
 
-            const response = await axios.post(`${API_BASE_URL}/api/predict/batch`, formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data'
-                }
+            const { data } = await api.post("/predict/batch", formData, {
+                headers: { "Content-Type": "multipart/form-data" },
             });
-
-            setBatchResults(response.data);
+            setBatchResults(data);
         } catch (err) {
-            setError(err.response?.data?.detail || 'Batch prediction failed');
+            setError(err?.response?.data?.detail || "Batch prediction failed");
         } finally {
             setLoading(false);
         }
@@ -100,51 +100,59 @@ function App() {
     const handleExampleSelect = (example) => {
         setSequence(example.sequence);
         setSequenceId(example.id);
-        setActiveTab('single');
+        setActiveTab("single");
     };
 
     const downloadResults = async (resultsData) => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/download/results`, {
+            const { data } = await api.get("/download/results", {
                 params: { results: JSON.stringify(resultsData) },
-                responseType: 'blob'
+                responseType: "blob",
             });
-
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
+            const url = window.URL.createObjectURL(new Blob([data]));
+            const link = document.createElement("a");
             link.href = url;
-            link.setAttribute('download', 'ptm_predictions.csv');
+            link.setAttribute("download", "ptm_predictions.csv");
             document.body.appendChild(link);
             link.click();
             link.remove();
         } catch (err) {
-            console.error('Download failed:', err);
+            console.error("Download failed:", err);
         }
     };
 
     const renderSequenceVisualization = (result) => {
-        const sequence = result.sequence;
-        const segments = result.segments;
+        const seq = result?.sequence || "";
+        const segments = result?.segments || [];
 
         return (
             <div className="sequence-visualization">
                 <h3>Sequence Visualization</h3>
                 <div className="sequence-display">
-                    {sequence.split('').map((aa, index) => {
+                    {seq.split("").map((aa, index) => {
                         const segment = segments[index];
-                        const maxProb = Math.max(
-                            ...Object.values(segment.predictions).map(p => p.probability)
-                        );
-                        const dominantPTM = Object.entries(segment.predictions)
-                            .find(([ptm, pred]) => pred.probability === maxProb)?.[0];
+                        if (!segment || !segment.predictions) {
+                            return (
+                                <span key={index} className="amino-acid">
+                  {aa}
+                </span>
+                            );
+                        }
+
+                        const preds = segment.predictions || {};
+                        const maxProb = Math.max(0, ...Object.values(preds).map((p) => num(p?.probability)));
+                        const dominantPTM =
+                            Object.entries(preds).find(([, p]) => num(p?.probability) === maxProb)?.[0] || "";
 
                         return (
                             <span
                                 key={index}
-                                className={`amino-acid ${maxProb > 0.5 ? `ptm-${dominantPTM.toLowerCase()}` : ''}`}
-                                title={`Position: ${index + 1}, AA: ${aa}\n${Object.entries(segment.predictions)
-                                    .map(([ptm, pred]) => `${PTM_NAMES[ptm]}: ${(pred.probability * 100).toFixed(1)}%`)
-                                    .join('\n')}`}
+                                className={`amino-acid ${
+                                    maxProb > 0.5 ? `ptm-${String(dominantPTM).toLowerCase()}` : ""
+                                }`}
+                                title={`Position: ${index + 1}, AA: ${aa}\n${Object.entries(preds)
+                                    .map(([ptm, pred]) => `${PTM_NAMES[ptm]}: ${pct(pred?.probability)}`)
+                                    .join("\n")}`}
                             >
                 {aa}
               </span>
@@ -154,10 +162,7 @@ function App() {
                 <div className="legend">
                     {Object.entries(PTM_COLORS).map(([ptm, color]) => (
                         <div key={ptm} className="legend-item">
-              <span
-                  className="legend-color"
-                  style={{ backgroundColor: color }}
-              ></span>
+                            <span className="legend-color" style={{ backgroundColor: color }} />
                             <span>{PTM_NAMES[ptm]}</span>
                         </div>
                     ))}
@@ -167,52 +172,58 @@ function App() {
     };
 
     const renderPTMSummary = (result) => {
+        if (!result?.predictions) return null;
+
         return (
             <div className="ptm-summary">
                 <h3>PTM Prediction Summary</h3>
                 <div className="summary-grid">
-                    {Object.entries(result.predictions).map(([ptm, data]) => (
-                        <div key={ptm} className="summary-card">
-                            <div className="ptm-header">
-                                <h4 style={{ color: PTM_COLORS[ptm] }}>{PTM_NAMES[ptm]}</h4>
-                                <span className="site-count">{data.count} sites</span>
-                            </div>
-                            <div className="ptm-stats">
-                                <div className="stat">
-                                    <span className="stat-label">Max Probability:</span>
-                                    <span className="stat-value">{(data.max_probability * 100).toFixed(1)}%</span>
+                    {Object.entries(result.predictions).map(([ptm, data]) => {
+                        const sites = Array.isArray(data?.sites) ? data.sites : [];
+                        return (
+                            <div key={ptm} className="summary-card">
+                                <div className="ptm-header">
+                                    <h4 style={{ color: PTM_COLORS[ptm] }}>{PTM_NAMES[ptm]}</h4>
+                                    <span className="site-count">{num(data?.count, 0)} sites</span>
                                 </div>
-                                <div className="stat">
-                                    <span className="stat-label">Avg Probability:</span>
-                                    <span className="stat-value">{(data.avg_probability * 100).toFixed(1)}%</span>
-                                </div>
-                            </div>
-                            {data.sites.length > 0 && (
-                                <div className="predicted-sites">
-                                    <span className="stat-label">Predicted Sites:</span>
-                                    <div className="sites-list">
-                                        {data.sites.slice(0, 10).map(site => (
-                                            <span key={site} className="site-badge">
-                        {site + 1}
-                      </span>
-                                        ))}
-                                        {data.sites.length > 10 && (
-                                            <span className="more-sites">+{data.sites.length - 10} more</span>
-                                        )}
+                                <div className="ptm-stats">
+                                    <div className="stat">
+                                        <span className="stat-label">Max Probability:</span>
+                                        <span className="stat-value">{pct(data?.max_probability)}</span>
+                                    </div>
+                                    <div className="stat">
+                                        <span className="stat-label">Avg Probability:</span>
+                                        <span className="stat-value">{pct(data?.avg_probability)}</span>
                                     </div>
                                 </div>
-                            )}
-                        </div>
-                    ))}
+                                {sites.length > 0 && (
+                                    <div className="predicted-sites">
+                                        <span className="stat-label">Predicted Sites:</span>
+                                        <div className="sites-list">
+                                            {sites.slice(0, 10).map((site) => (
+                                                <span key={site} className="site-badge">
+                          {site + 1}
+                        </span>
+                                            ))}
+                                            {sites.length > 10 && (
+                                                <span className="more-sites">+{sites.length - 10} more</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         );
     };
 
     const renderDetailedResults = (result) => {
-        const highConfidenceSites = result.segments.filter(segment =>
-            Object.values(segment.predictions).some(pred => pred.probability > 0.7)
-        );
+        const highConfidenceSites =
+            (result?.segments ?? []).filter((segment) =>
+                Object.values(segment?.predictions ?? {}).some((pred) => num(pred?.probability) > 0.7)
+            ) || [];
 
         return (
             <div className="detailed-results">
@@ -236,19 +247,17 @@ function App() {
                                 <tr key={segment.position}>
                                     <td>{segment.position}</td>
                                     <td className="residue-cell">{segment.residue}</td>
-                                    {Object.entries(segment.predictions).map(([ptm, pred]) => (
+                                    {Object.entries(segment?.predictions ?? {}).map(([ptm, pred]) => (
                                         <td key={ptm} className="probability-cell">
                                             <div className="probability-bar">
                                                 <div
                                                     className="probability-fill"
                                                     style={{
-                                                        width: `${pred.probability * 100}%`,
-                                                        backgroundColor: PTM_COLORS[ptm]
+                                                        width: `${num(pred?.probability) * 100}%`,
+                                                        backgroundColor: PTM_COLORS[ptm],
                                                     }}
-                                                ></div>
-                                                <span className="probability-text">
-                            {(pred.probability * 100).toFixed(1)}%
-                          </span>
+                                                />
+                                                <span className="probability-text">{pct(pred?.probability)}</span>
                                             </div>
                                         </td>
                                     ))}
@@ -273,28 +282,25 @@ function App() {
                     <h3>Batch Processing Results</h3>
                     <div className="batch-stats">
                         <div className="stat-item">
-                            <span className="stat-number">{batchResults.total_processed}</span>
+                            <span className="stat-number">{num(batchResults?.total_processed, 0)}</span>
                             <span className="stat-label">Sequences Processed</span>
                         </div>
                         <div className="stat-item">
-                            <span className="stat-number">{batchResults.failed_sequences.length}</span>
+                            <span className="stat-number">{num(batchResults?.failed_sequences?.length, 0)}</span>
                             <span className="stat-label">Failed</span>
                         </div>
                         <div className="stat-item">
-                            <span className="stat-number">{batchResults.processing_time.toFixed(2)}s</span>
+                            <span className="stat-number">{sec(batchResults?.processing_time)}s</span>
                             <span className="stat-label">Processing Time</span>
                         </div>
                     </div>
 
-                    <button
-                        className="download-btn"
-                        onClick={() => downloadResults(batchResults.results)}
-                    >
+                    <button className="download-btn" onClick={() => downloadResults(batchResults.results)}>
                         Download All Results (CSV)
                     </button>
                 </div>
 
-                {batchResults.failed_sequences.length > 0 && (
+                {batchResults?.failed_sequences?.length > 0 && (
                     <div className="failed-sequences">
                         <h4>Failed Sequences</h4>
                         {batchResults.failed_sequences.map((failed, index) => (
@@ -306,24 +312,25 @@ function App() {
                 )}
 
                 <div className="batch-results-list">
-                    {batchResults.results.map((result, index) => (
+                    {(batchResults?.results ?? []).map((result, index) => (
                         <div key={index} className="batch-result-item">
                             <div className="result-header">
                                 <h4>{result.sequence_id}</h4>
                                 <span className="sequence-info">
-                  Length: {result.length} |
-                  Processing: {result.processing_time.toFixed(2)}s
+                  Length: {num(result?.length, 0)} | Processing: {sec(result?.processing_time)}s
                 </span>
                             </div>
 
                             <div className="result-summary">
-                                {Object.entries(result.predictions).map(([ptm, data]) => (
+                                {Object.entries(result?.predictions ?? {}).map(([ptm, data]) => (
                                     <div key={ptm} className="ptm-quick-stat">
                     <span
                         className="ptm-indicator"
                         style={{ backgroundColor: PTM_COLORS[ptm] }}
-                    ></span>
-                                        <span>{PTM_NAMES[ptm]}: {data.count} sites</span>
+                    />
+                                        <span>
+                      {PTM_NAMES[ptm]}: {num(data?.count, 0)} sites
+                    </span>
                                     </div>
                                 ))}
                             </div>
@@ -345,32 +352,32 @@ function App() {
                 {error && (
                     <div className="error-message">
                         <span>⚠️ {error}</span>
-                        <button onClick={() => setError('')}>×</button>
+                        <button onClick={() => setError("")}>×</button>
                     </div>
                 )}
 
                 <div className="tabs">
                     <button
-                        className={`tab ${activeTab === 'single' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('single')}
+                        className={`tab ${activeTab === "single" ? "active" : ""}`}
+                        onClick={() => setActiveTab("single")}
                     >
                         Single Sequence
                     </button>
                     <button
-                        className={`tab ${activeTab === 'batch' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('batch')}
+                        className={`tab ${activeTab === "batch" ? "active" : ""}`}
+                        onClick={() => setActiveTab("batch")}
                     >
                         Batch Processing
                     </button>
                     <button
-                        className={`tab ${activeTab === 'examples' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('examples')}
+                        className={`tab ${activeTab === "examples" ? "active" : ""}`}
+                        onClick={() => setActiveTab("examples")}
                     >
                         Examples
                     </button>
                 </div>
 
-                {activeTab === 'single' && (
+                {activeTab === "single" && (
                     <div className="input-section">
                         <div className="form-group">
                             <label>Sequence ID (optional):</label>
@@ -405,12 +412,12 @@ function App() {
                             disabled={loading || !sequence.trim()}
                             className="predict-btn"
                         >
-                            {loading ? 'Predicting...' : 'Predict PTM Sites'}
+                            {loading ? "Predicting..." : "Predict PTM Sites"}
                         </button>
                     </div>
                 )}
 
-                {activeTab === 'batch' && (
+                {activeTab === "batch" && (
                     <div className="batch-section">
                         <div className="form-group">
                             <label>Upload FASTA File:</label>
@@ -422,7 +429,7 @@ function App() {
                             />
                             {selectedFile && (
                                 <div className="file-info">
-                                    Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+                                    Selected: {selectedFile.name} ({(num(selectedFile?.size / 1024, 0)).toFixed(1)} KB)
                                 </div>
                             )}
                         </div>
@@ -432,7 +439,7 @@ function App() {
                             disabled={loading || !selectedFile}
                             className="predict-btn"
                         >
-                            {loading ? 'Processing...' : 'Process Batch'}
+                            {loading ? "Processing..." : "Process Batch"}
                         </button>
 
                         <div className="batch-info">
@@ -447,7 +454,7 @@ function App() {
                     </div>
                 )}
 
-                {activeTab === 'examples' && (
+                {activeTab === "examples" && (
                     <div className="examples-section">
                         <h3>Example Sequences</h3>
                         <p>Click on any example to load it for prediction:</p>
@@ -464,11 +471,9 @@ function App() {
                                     </div>
                                     <div className="example-sequence">
                                         {example.sequence.substring(0, 60)}
-                                        {example.sequence.length > 60 && '...'}
+                                        {example.sequence.length > 60 && "..."}
                                     </div>
-                                    <div className="example-description">
-                                        {example.description}
-                                    </div>
+                                    <div className="example-description">{example.description}</div>
                                     <div className="example-info">
                                         Length: {example.sequence.length} amino acids
                                     </div>
@@ -480,19 +485,19 @@ function App() {
 
                 {loading && (
                     <div className="loading">
-                        <div className="spinner"></div>
+                        <div className="spinner" />
                         <p>Processing your request...</p>
                     </div>
                 )}
 
-                {results && activeTab === 'single' && (
+                {results && activeTab === "single" && (
                     <div className="results-section">
                         <div className="results-header">
                             <h2>Prediction Results</h2>
                             <div className="results-meta">
                                 <span>Sequence ID: {results.sequence_id}</span>
                                 <span>Length: {results.length} amino acids</span>
-                                <span>Processing Time: {results.processing_time.toFixed(2)}s</span>
+                                <span>Processing Time: {sec(results?.processing_time)}s</span>
                                 <button
                                     className="download-btn-small"
                                     onClick={() => downloadResults(results)}
@@ -508,12 +513,12 @@ function App() {
                     </div>
                 )}
 
-                {batchResults && activeTab === 'batch' && renderBatchResults()}
+                {batchResults && activeTab === "batch" && renderBatchResults()}
             </div>
 
             <footer className="app-footer">
                 <p>
-                    Powered by FastAPI and React.js |
+                    Powered by FastAPI and React.js |{" "}
                     <a href={`${API_BASE_URL}/docs`} target="_blank" rel="noopener noreferrer">
                         API Documentation
                     </a>

@@ -1,0 +1,4 @@
+# keep models but skip heavy/unused stuff
+venv/
+**/__pycache__/
+*.ipynb

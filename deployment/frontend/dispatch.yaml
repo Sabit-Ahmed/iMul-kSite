@@ -1,0 +1,5 @@
+dispatch:
+  - url: "*/api/*"
+    service: default       # your FastAPI service
+  - url: "*/*"
+    service: frontend      # your React service

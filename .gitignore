@@ -1,3 +1,14 @@
 .idea
+**venv
+**__pycache__
 deployment/backend/venv
 deployment/frontend/node_modules
+/deployment/backend/.env
+/deployment/frontend/.env.development
+/deployment/frontend/.env.production
+/deployment/frontend/build
+**.joblib
+**.sav
+**.env
+**.env.development
+**env.production

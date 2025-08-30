@@ -1,0 +1,16 @@
+# app.yaml (backend/default service)
+service: default
+runtime: python311
+
+entrypoint: >
+  gunicorn -k uvicorn.workers.UvicornWorker main:app
+  -b :$PORT
+  --log-level info
+  --access-logfile -
+  --error-logfile -
+
+instance_class: F2
+automatic_scaling:
+  target_cpu_utilization: 0.65
+  min_instances: 0
+  max_instances: 3
